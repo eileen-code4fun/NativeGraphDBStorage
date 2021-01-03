@@ -14,8 +14,7 @@ func verifyInboundsOutbounds(g *GraphDB, nid uint16, inbounds []uint16, outbound
     }
 }
 
-func TestGraphDBInMemory(t *testing.T) {
-  g := NewInMemoryDB()
+func testGraph(g *GraphDB, t *testing.T) {
   g.AddNode(1)
   g.AddNode(2)
   g.AddNode(3)
@@ -34,4 +33,16 @@ func TestGraphDBInMemory(t *testing.T) {
   verifyInboundsOutbounds(g, 4, []uint16{2}, nil, t)
   verifyInboundsOutbounds(g, 5, []uint16{3}, nil, t)
   verifyInboundsOutbounds(g, 6, []uint16{3}, nil, t)
+}
+
+func TestGraphDBInMemory(t *testing.T) {
+  g := NewInMemoryDB()
+  defer g.Close()
+  testGraph(g, t)
+}
+
+func TestGraphDBInFile(t *testing.T) {
+  g := OpenDB("nodes.db", "relationships.db")
+  defer g.Close()
+  testGraph(g, t)
 }

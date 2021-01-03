@@ -2,6 +2,9 @@ package graphdb
 
 import (
   "fmt"
+  "log"
+  "os"
+  "syscall"
 )
 
 const (
@@ -16,8 +19,29 @@ type GraphDB struct {
   relationshipsStorage []byte
 }
 
+func mmap(path string) []byte {
+  f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+  if err != nil {
+    log.Fatalf("Failed to open node file %s; %v", path, err)
+  }
+  if err := f.Truncate(maxLen); err != nil {
+    log.Fatalf("Failed to resize file %s; %v", path, err)
+  }
+  data, err := syscall.Mmap(int(f.Fd()), 0, maxLen, syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
+  if err != nil {
+    log.Fatalf("Failed to mmap file %s; %v", path, err)
+  }
+  return data
+}
+
 func OpenDB(nodesPath, relationshipsPath string) *GraphDB {
-  return nil
+  return &GraphDB{
+    inMemory: false,
+    offsetByNID: map[uint16]int{},
+    nodesStorage: mmap(nodesPath),
+    offsetByRID: map[uint16]int{},
+    relationshipsStorage: mmap(relationshipsPath),
+  }
 }
 
 func NewInMemoryDB() *GraphDB {

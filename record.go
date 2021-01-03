@@ -1,12 +1,7 @@
 package graphdb
 
 import (
-  "encoding/binary"
-)
-
-const (
-  nodeRecordSize = 4 + 1
-  relationshipRecordSize = 14 + 1
+  "unsafe"
 )
 
 type NodeRecord struct {
@@ -14,21 +9,21 @@ type NodeRecord struct {
   rid uint16
 }
 
-func MarshalNode(n NodeRecord, storage []byte) {
+func NewNodeRecord(storage []byte) *NodeRecord {
   // Mark in use.
   storage[0] = 1
-  binary.LittleEndian.PutUint16(storage[1:], n.nid)
-  binary.LittleEndian.PutUint16(storage[3:], n.rid)
+  return (*NodeRecord)(unsafe.Pointer(&storage[1]))
 }
 
-func UnmarshalNode(storage []byte) *NodeRecord {
+func GetNodeRecord(storage []byte) *NodeRecord {
   if !InUse(storage) {
     return nil
   }
-  n := &NodeRecord{}
-  n.nid = binary.LittleEndian.Uint16(storage[1:])
-  n.rid = binary.LittleEndian.Uint16(storage[3:])
-  return n
+  return (*NodeRecord)(unsafe.Pointer(&storage[1]))
+}
+
+func NodeRecordSize() int {
+  return int(unsafe.Sizeof(NodeRecord{})) + 1
 }
 
 type RelationshipRecord struct {
@@ -38,30 +33,21 @@ type RelationshipRecord struct {
   dstRIDPrev, dstRIDNext uint16
 }
 
-func MarshalRelationship(r RelationshipRecord, storage []byte) {
+func NewRelationshipRecord(storage []byte) *RelationshipRecord {
+  // Mark in use.
   storage[0] = 1
-  binary.LittleEndian.PutUint16(storage[1:], r.rid)
-  binary.LittleEndian.PutUint16(storage[3:], r.srcID)
-  binary.LittleEndian.PutUint16(storage[5:], r.dstID)
-  binary.LittleEndian.PutUint16(storage[7:], r.srcRIDPrev)
-  binary.LittleEndian.PutUint16(storage[9:], r.srcRIDNext)
-  binary.LittleEndian.PutUint16(storage[11:], r.dstRIDPrev)
-  binary.LittleEndian.PutUint16(storage[13:], r.dstRIDNext)
+  return (*RelationshipRecord)(unsafe.Pointer(&storage[1]))
 }
 
-func UnmarshalRelationship(storage []byte) *RelationshipRecord {
+func GetRelationshipRecord(storage []byte) *RelationshipRecord {
   if !InUse(storage) {
     return nil
   }
-  r := &RelationshipRecord{}
-  r.rid = binary.LittleEndian.Uint16(storage[1:])
-  r.srcID = binary.LittleEndian.Uint16(storage[3:])
-  r.dstID = binary.LittleEndian.Uint16(storage[5:])
-  r.srcRIDPrev = binary.LittleEndian.Uint16(storage[7:])
-  r.srcRIDNext = binary.LittleEndian.Uint16(storage[9:])
-  r.dstRIDPrev = binary.LittleEndian.Uint16(storage[11:])
-  r.dstRIDNext = binary.LittleEndian.Uint16(storage[13:])
-  return r
+  return (*RelationshipRecord)(unsafe.Pointer(&storage[1]))
+}
+
+func RelationshipRecordSize() int {
+  return int(unsafe.Sizeof(RelationshipRecord{})) + 1
 }
 
 func InUse(storage []byte) bool {

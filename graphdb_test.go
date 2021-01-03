@@ -15,18 +15,42 @@ func verifyInboundsOutbounds(g *GraphDB, nid uint16, inbounds []uint16, outbound
 }
 
 func testGraph(g *GraphDB, t *testing.T) {
-  g.AddNode(1)
-  g.AddNode(2)
-  g.AddNode(3)
-  g.AddNode(4)
-  g.AddNode(5)
-  g.AddNode(6)
-  g.AddRelationship(1, 2)
-  g.AddRelationship(1, 3)
-  g.AddRelationship(2, 3)
-  g.AddRelationship(2, 4)
-  g.AddRelationship(3, 5)
-  g.AddRelationship(3, 6)
+  if err := g.AddNode(1); err != nil {
+    t.Errorf("failed to add node %d; %v", 1, err)
+  }
+  if err := g.AddNode(2); err != nil {
+    t.Errorf("failed to add node %d; %v", 2, err)
+  }
+  if err := g.AddNode(3); err != nil {
+    t.Errorf("failed to add node %d; %v", 3, err)
+  }
+  if err := g.AddNode(4); err != nil {
+    t.Errorf("failed to add node %d; %v", 4, err)
+  }
+  if err := g.AddNode(5); err != nil {
+    t.Errorf("failed to add node %d; %v", 5, err)
+  }
+  if err := g.AddNode(6); err != nil {
+    t.Errorf("failed to add node %d; %v", 6, err)
+  }
+  if err := g.AddRelationship(1, 2); err != nil {
+    t.Errorf("failed to add relationship %d->%d; %v", 1, 2, err)
+  }
+  if err := g.AddRelationship(1, 3); err != nil {
+    t.Errorf("failed to add relationship %d->%d; %v", 1, 3, err)
+  }
+  if err := g.AddRelationship(2, 3); err != nil {
+    t.Errorf("failed to add relationship %d->%d; %v", 2, 3, err)
+  }
+  if err := g.AddRelationship(2, 4); err != nil {
+    t.Errorf("failed to add relationship %d->%d; %v", 2, 4, err)
+  }
+  if err := g.AddRelationship(3, 5); err != nil {
+    t.Errorf("failed to add relationship %d->%d; %v", 3, 5, err)
+  }
+  if err := g.AddRelationship(3, 6); err != nil {
+    t.Errorf("failed to add relationship %d->%d; %v", 3, 6, err)
+  }
   verifyInboundsOutbounds(g, 1, nil, []uint16{2, 3}, t)
   verifyInboundsOutbounds(g, 2, []uint16{1}, []uint16{3, 4}, t)
   verifyInboundsOutbounds(g, 3, []uint16{1, 2}, []uint16{5, 6}, t)

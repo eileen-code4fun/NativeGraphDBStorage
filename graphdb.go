@@ -74,7 +74,7 @@ func (g *GraphDB) AddNode(nid uint16) error {
     return fmt.Errorf("node %d already exists", nid)
   }
   var i int
-  for ; i < maxLen; i += nodeRecordSize {
+  for ; i < maxLen; i += NodeRecordSize() {
     if !InUse(g.nodesStorage[i:]) {
       break
     }
@@ -82,53 +82,40 @@ func (g *GraphDB) AddNode(nid uint16) error {
   if i >= maxLen {
     return fmt.Errorf("no more space for node %d", nid)
   }
-  n := NodeRecord{nid: nid}
-  MarshalNode(n, g.nodesStorage[i:])
+  n := NewNodeRecord(g.nodesStorage[i:])
+  n.nid = nid
   g.offsetByNID[nid] = i
   return nil
 }
 
-func (g *GraphDB) getNode(nid uint16) (NodeRecord, error) {
+func (g *GraphDB) getNode(nid uint16) (*NodeRecord, error) {
   offset, ok := g.offsetByNID[nid]
   if !ok {
-    return NodeRecord{}, fmt.Errorf("node %d does not exist", nid)
+    return nil, fmt.Errorf("node %d does not exist", nid)
   }
-  n := UnmarshalNode(g.nodesStorage[offset:])
-  if n == nil {
-    return NodeRecord{}, fmt.Errorf("internal error on node %d", nid)
-  }
-  return *n, nil
+  return GetNodeRecord(g.nodesStorage[offset:]), nil
 }
 
-func (g *GraphDB) getRelationship(rid uint16) (RelationshipRecord, error) {
+func (g *GraphDB) getRelationship(rid uint16) (*RelationshipRecord, error) {
   offset, ok := g.offsetByRID[rid]
   if !ok {
-    return RelationshipRecord{}, fmt.Errorf("relationship %d does not exist", rid)
+    return nil, fmt.Errorf("relationship %d does not exist", rid)
   }
-  r := UnmarshalRelationship(g.relationshipsStorage[offset:])
-  if r == nil {
-    return RelationshipRecord{}, fmt.Errorf("internal error on relationship %d", rid)
-  }
-  return *r, nil
+  return GetRelationshipRecord(g.relationshipsStorage[offset:]), nil
 }
 
-func (g *GraphDB) prependRelationship(n NodeRecord, r *RelationshipRecord) (RelationshipRecord, RelationshipRecord, error) {
-  f, err := g.getRelationship(n.rid)
+func (g *GraphDB) prependRelationship(n *NodeRecord, r *RelationshipRecord) error {
+  first, err := g.getRelationship(n.rid)
   if err != nil {
-    return RelationshipRecord{}, RelationshipRecord{}, err
+    return err
   }
-  lastRID := f.srcRIDPrev
-  if f.dstID == n.nid {
-    lastRID = f.dstRIDPrev
+  lastRID := first.srcRIDPrev
+  if first.dstID == n.nid {
+    lastRID = first.dstRIDPrev
   }
-  l, err := g.getRelationship(lastRID)
+  last, err := g.getRelationship(lastRID)
   if err != nil {
-    return RelationshipRecord{}, RelationshipRecord{}, err
-  }
-  first := &f
-  last := &l
-  if f.rid == l.rid {
-    last = &f
+    return err
   }
   // Point first.prev to r.
   if first.srcID == n.nid {
@@ -151,30 +138,22 @@ func (g *GraphDB) prependRelationship(n NodeRecord, r *RelationshipRecord) (Rela
   } else {
     last.dstRIDNext = r.rid
   }
-  return *first, *last, nil
-}
-
-func (g *GraphDB) updateRelationships(n NodeRecord, r *RelationshipRecord) error {
-  if n.rid == 0 {
-    // First relationship for the node.
-    n.rid = r.rid
-    // Update the node.
-    MarshalNode(n, g.nodesStorage[g.offsetByNID[n.nid]:])
-    return nil
-  }
-  first, last, err := g.prependRelationship(n, r)
-  if err != nil {
-    return err
-  }
-  // Store first and last.
-  MarshalRelationship(first, g.relationshipsStorage[g.offsetByRID[first.rid]:])
-  if first.rid != last.rid {
-    MarshalRelationship(last, g.relationshipsStorage[g.offsetByRID[last.rid]:])
-  }
   return nil
 }
 
+func (g *GraphDB) updateRelationships(n *NodeRecord, r *RelationshipRecord) error {
+  if n.rid == 0 {
+    // First relationship for the node.
+    n.rid = r.rid
+    return nil
+  }
+  return g.prependRelationship(n, r)
+}
+
 func (g *GraphDB) AddRelationship(srcID, dstID uint16) error {
+  if g.RelationshipExists(srcID, dstID) {
+    return nil
+  }
   // Read nodes from storage.
   srcNode, err := g.getNode(srcID)
   if err != nil {
@@ -184,26 +163,8 @@ func (g *GraphDB) AddRelationship(srcID, dstID uint16) error {
   if err != nil {
     return err
   }
-  newRID := uint16(len(g.offsetByRID)) + 1
-  r := RelationshipRecord{
-    rid: newRID,
-    srcID: srcID,
-    dstID: dstID,
-    // All point to itself initially.
-    srcRIDPrev: newRID,
-    srcRIDNext: newRID,
-    dstRIDPrev: newRID,
-    dstRIDNext: newRID,
-  }
-  if err := g.updateRelationships(srcNode, &r); err != nil {
-    return err
-  }
-  if err := g.updateRelationships(dstNode, &r); err != nil {
-    return err
-  }
-  // Add the new relationship to storage.
   var i int
-  for ; i < maxLen; i += relationshipRecordSize {
+  for ; i < maxLen; i += RelationshipRecordSize() {
     if !InUse(g.relationshipsStorage[i:]) {
       break
     }
@@ -211,12 +172,37 @@ func (g *GraphDB) AddRelationship(srcID, dstID uint16) error {
   if i >= maxLen {
     return fmt.Errorf("no more space for new relationship %d, %d", srcID, dstID)
   }
-  MarshalRelationship(r, g.relationshipsStorage[i:])
+  newRID := uint16(len(g.offsetByRID)) + 1
+  r := NewRelationshipRecord(g.relationshipsStorage[i:])
+  r.rid = newRID
+  r.srcID = srcID
+  r.dstID = dstID
+  // All point to itself initially.
+  r.srcRIDPrev = newRID
+  r.srcRIDNext = newRID
+  r.dstRIDPrev = newRID
+  r.dstRIDNext = newRID
   g.offsetByRID[r.rid] = i
+  if err := g.updateRelationships(srcNode, r); err != nil {
+    return err
+  }
+  if err := g.updateRelationships(dstNode, r); err != nil {
+    return err
+  }
   return nil
 }
 
 // TODO: DeleteNode, DeleteRelationship.
+
+func (g *GraphDB) RelationshipExists(srcID, dstID uint16) bool {
+  outs := g.FindOutbounds(srcID)
+  for _, dst := range outs {
+    if dst == dstID {
+      return true
+    }
+  }
+  return false
+}
 
 func (g *GraphDB) FindInbounds(nid uint16) []uint16 {
   var ret []uint16
@@ -240,12 +226,12 @@ func (g *GraphDB) FindOutbounds(nid uint16) []uint16 {
   return ret
 }
 
-func (g *GraphDB) getRelationships(nid uint16) []RelationshipRecord {
+func (g *GraphDB) getRelationships(nid uint16) []*RelationshipRecord {
   n, err := g.getNode(nid)
   if err != nil {
     return nil
   }
-  var ret []RelationshipRecord
+  var ret []*RelationshipRecord
   next := n.rid
   for {
     r, err := g.getRelationship(next)

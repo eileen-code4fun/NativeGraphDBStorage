@@ -80,17 +80,22 @@ func (g *GraphDB) getRelationship(rid uint16) (RelationshipRecord, error) {
 }
 
 func (g *GraphDB) prependRelationship(n NodeRecord, r *RelationshipRecord) (RelationshipRecord, RelationshipRecord, error) {
-  first, err := g.getRelationship(n.rid)
+  f, err := g.getRelationship(n.rid)
   if err != nil {
     return RelationshipRecord{}, RelationshipRecord{}, err
   }
-  lastRID := first.srcRIDPrev
-  if first.dstID == n.nid {
-    lastRID = first.dstRIDPrev
+  lastRID := f.srcRIDPrev
+  if f.dstID == n.nid {
+    lastRID = f.dstRIDPrev
   }
-  last, err := g.getRelationship(lastRID)
+  l, err := g.getRelationship(lastRID)
   if err != nil {
     return RelationshipRecord{}, RelationshipRecord{}, err
+  }
+  first := &f
+  last := &l
+  if f.rid == l.rid {
+    last = &f
   }
   // Point first.prev to r.
   if first.srcID == n.nid {
@@ -113,7 +118,7 @@ func (g *GraphDB) prependRelationship(n NodeRecord, r *RelationshipRecord) (Rela
   } else {
     last.dstRIDNext = r.rid
   }
-  return first, last, nil
+  return *first, *last, nil
 }
 
 func (g *GraphDB) updateRelationships(n NodeRecord, r *RelationshipRecord) error {
@@ -130,7 +135,9 @@ func (g *GraphDB) updateRelationships(n NodeRecord, r *RelationshipRecord) error
   }
   // Store first and last.
   MarshalRelationship(first, g.relationshipsStorage[g.offsetByRID[first.rid]:])
-  MarshalRelationship(last, g.relationshipsStorage[g.offsetByRID[last.rid]:])
+  if first.rid != last.rid {
+    MarshalRelationship(last, g.relationshipsStorage[g.offsetByRID[last.rid]:])
+  }
   return nil
 }
 

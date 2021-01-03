@@ -31,6 +31,9 @@ func mmap(path string) []byte {
   if err != nil {
     log.Fatalf("Failed to mmap file %s; %v", path, err)
   }
+  if err := f.Close(); err != nil {
+    log.Fatalf("Failed to close the file %s; %v", path ,err)
+  }
   return data
 }
 
@@ -57,6 +60,12 @@ func NewInMemoryDB() *GraphDB {
 func (g *GraphDB) Close() {
   if g.inMemory {
     return
+  }
+  if err := syscall.Munmap(g.nodesStorage); err != nil {
+    log.Fatalf("Failed to munmap nodes file; %v", err)
+  }
+  if err := syscall.Munmap(g.relationshipsStorage); err != nil {
+    log.Fatalf("Failed to munmap relationships file; %v", err)
   }
 }
 
